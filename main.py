@@ -6,7 +6,7 @@ from typing import List
 from database import db, create_document, get_documents
 from schemas import BreadProduct, Order, ContactMessage
 
-app = FastAPI(title="Rasta Bread Man Company API", description="Backend for bakery website", version="1.0.0")
+app = FastAPI(title="Rasta Bread Man Company API", description="Backend for bakery website", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,6 +38,11 @@ def _seed_products_if_empty():
                     "organic": True,
                     "image": "https://images.unsplash.com/photo-1541781286675-09d03b606ffa?q=80&w=1200&auto=format&fit=crop",
                     "in_stock": True,
+                    "available_today": True,
+                    "lead_time_hours": 0,
+                    "is_special": False,
+                    "special_price": None,
+                    "tags": ["Customer Favorite"]
                 },
                 {
                     "name": "Banana Island Loaf",
@@ -48,6 +53,11 @@ def _seed_products_if_empty():
                     "organic": True,
                     "image": "https://images.unsplash.com/photo-1517686469429-8bdb88b9f907?q=80&w=1200&auto=format&fit=crop",
                     "in_stock": True,
+                    "available_today": False,
+                    "lead_time_hours": 24,
+                    "is_special": True,
+                    "special_price": 6.75,
+                    "tags": ["Weekend Special", "Ripe Bananas"]
                 },
                 {
                     "name": "Coconut Sunshine Loaf",
@@ -58,6 +68,11 @@ def _seed_products_if_empty():
                     "organic": True,
                     "image": "https://images.unsplash.com/photo-1548160-9c8b-4b57-9c1f-035e3e7d5b1e?q=80&w=1200&auto=format&fit=crop",
                     "in_stock": True,
+                    "available_today": True,
+                    "lead_time_hours": 0,
+                    "is_special": False,
+                    "special_price": None,
+                    "tags": ["Toasted Coconut"]
                 },
             ]
             for d in defaults:
@@ -85,7 +100,12 @@ def list_products():
 def create_order(order: Order):
     try:
         order_id = create_document("order", order)
-        return {"status": "ok", "order_id": order_id}
+        # Simulate sending notification (email/whatsapp) by acknowledging preference
+        notify = {
+            "channel": order.notify_via,
+            "status": "queued"
+        }
+        return {"status": "ok", "order_id": order_id, "notification": notify}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
