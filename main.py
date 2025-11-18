@@ -1,8 +1,12 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List
 
-app = FastAPI()
+from database import db, create_document, get_documents
+from schemas import BreadProduct, Order, ContactMessage
+
+app = FastAPI(title="Rasta Bread Man Company API", description="Backend for bakery website", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -14,15 +18,87 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Hello from FastAPI Backend!"}
+    return {"message": "Rasta Bread Man Company API running"}
 
-@app.get("/api/hello")
-def hello():
-    return {"message": "Hello from the backend API!"}
+
+def _seed_products_if_empty():
+    """Seed default bread products if collection is empty."""
+    try:
+        if db is None:
+            return
+        count = db["breadproduct"].count_documents({})
+        if count == 0:
+            defaults = [
+                {
+                    "name": "Chocolate Sweet Bread",
+                    "description": "Rich, moist vegan loaf made with organic cacao and coconut sugar.",
+                    "price": 8.5,
+                    "flavor": "Chocolate",
+                    "vegan": True,
+                    "organic": True,
+                    "image": "https://images.unsplash.com/photo-1541781286675-09d03b606ffa?q=80&w=1200&auto=format&fit=crop",
+                    "in_stock": True,
+                },
+                {
+                    "name": "Banana Island Loaf",
+                    "description": "Naturally sweet, ultra-soft banana bread with a hint of spice.",
+                    "price": 7.5,
+                    "flavor": "Banana",
+                    "vegan": True,
+                    "organic": True,
+                    "image": "https://images.unsplash.com/photo-1517686469429-8bdb88b9f907?q=80&w=1200&auto=format&fit=crop",
+                    "in_stock": True,
+                },
+                {
+                    "name": "Coconut Sunshine Loaf",
+                    "description": "Toasted coconut flakes and creamy coconut milk for a tropical treat.",
+                    "price": 8.0,
+                    "flavor": "Coconut",
+                    "vegan": True,
+                    "organic": True,
+                    "image": "https://images.unsplash.com/photo-1548160-9c8b-4b57-9c1f-035e3e7d5b1e?q=80&w=1200&auto=format&fit=crop",
+                    "in_stock": True,
+                },
+            ]
+            for d in defaults:
+                create_document("breadproduct", d)
+    except Exception:
+        # best-effort seeding; ignore errors so the endpoint still works
+        pass
+
+
+# Public endpoints
+@app.get("/api/products", response_model=List[BreadProduct])
+def list_products():
+    try:
+        _seed_products_if_empty()
+        docs = get_documents("breadproduct")
+        products = []
+        for d in docs:
+            d.pop("_id", None)
+            products.append(BreadProduct(**d))
+        return products
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/orders")
+def create_order(order: Order):
+    try:
+        order_id = create_document("order", order)
+        return {"status": "ok", "order_id": order_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/contact")
+def contact(message: ContactMessage):
+    try:
+        msg_id = create_document("contactmessage", message)
+        return {"status": "ok", "message_id": msg_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/test")
 def test_database():
-    """Test endpoint to check if database is available and accessible"""
     response = {
         "backend": "✅ Running",
         "database": "❌ Not Available",
@@ -31,39 +107,30 @@ def test_database():
         "connection_status": "Not Connected",
         "collections": []
     }
-    
+
     try:
-        # Try to import database module
-        from database import db
-        
         if db is not None:
             response["database"] = "✅ Available"
             response["database_url"] = "✅ Configured"
             response["database_name"] = db.name if hasattr(db, 'name') else "✅ Connected"
             response["connection_status"] = "Connected"
-            
-            # Try to list collections to verify connectivity
+
             try:
                 collections = db.list_collection_names()
-                response["collections"] = collections[:10]  # Show first 10 collections
+                response["collections"] = collections[:10]
                 response["database"] = "✅ Connected & Working"
             except Exception as e:
                 response["database"] = f"⚠️  Connected but Error: {str(e)[:50]}"
         else:
             response["database"] = "⚠️  Available but not initialized"
-            
-    except ImportError:
-        response["database"] = "❌ Database module not found (run enable-database first)"
+
     except Exception as e:
         response["database"] = f"❌ Error: {str(e)[:50]}"
-    
-    # Check environment variables
-    import os
+
     response["database_url"] = "✅ Set" if os.getenv("DATABASE_URL") else "❌ Not Set"
     response["database_name"] = "✅ Set" if os.getenv("DATABASE_NAME") else "❌ Not Set"
-    
-    return response
 
+    return response
 
 if __name__ == "__main__":
     import uvicorn
